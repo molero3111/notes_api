@@ -1,0 +1,21 @@
+events {
+    worker_connections  65536;
+}
+
+http {
+    server {
+        listen 80;
+        listen 443 ssl;  # Enable SSL on port 443
+        server_name localhost;
+
+        ssl_certificate /etc/nginx/ssl/fullchain.pem;
+        ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+        location /notes-manager/ {
+            proxy_pass http://web:8000/;  # Points to your Django web service
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+}

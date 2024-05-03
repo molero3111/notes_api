@@ -1,0 +1,51 @@
+[
+    {
+        "model": "notes.category",
+        "pk": 1,
+        "fields": {
+            "name": "Technology"
+        }
+    },
+    {
+        "model": "notes.category",
+        "pk": 2,
+        "fields": {
+            "name": "Science"
+        }
+    },
+    {
+        "model": "notes.category",
+        "pk": 3,
+        "fields": {
+            "name": "Art"
+        }
+    },
+    {
+        "model": "notes.category",
+        "pk": 4,
+        "fields": {
+            "name": "Programming"
+        }
+    },
+    {
+        "model": "notes.category",
+        "pk": 5,
+        "fields": {
+            "name": "Mathematics"
+        }
+    },
+    {
+        "model": "notes.category",
+        "pk": 6,
+        "fields": {
+            "name": "History"
+        }
+    },
+    {
+        "model": "notes.category",
+        "pk": 7,
+        "fields": {
+            "name": "Sports"
+        }
+    }
+]
