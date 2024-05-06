@@ -24,11 +24,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-(^je%$!$p)$7u4(#lo1g@bzgyyd!_0j!o&9r!^!k8d4#bhqxwo'
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-(^je%$!$p)$7u4(#lo1g@bzgyyd!_0j!o&9r!^!k8d4#bhqxwo',
+                    cast=str)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=str).split(' ')
 
@@ -38,19 +38,22 @@ CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default=None, cast=str)
 # Get CORS_ALLOW_ALL_ORIGINS from environment variable, default to empty string
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default=None, cast=str)
 
-# Check if the environment variable is set, and if it's not empty
-if CSRF_TRUSTED_ORIGINS == 'ALL':
-    # If empty, set it to None to allow all origins for CSRF
+if CSRF_TRUSTED_ORIGINS == '*':
     CSRF_TRUSTED_ORIGINS = ['http://*', 'https://*']
 else:
     CSRF_TRUSTED_ORIGINS = CSRF_TRUSTED_ORIGINS.split(' ')
 
 CORS_ALLOW_ALL_ORIGINS = False
-if CORS_ALLOWED_ORIGINS == 'ALL':
+if CORS_ALLOWED_ORIGINS == '*':
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOWED_ORIGINS = ['http://*', 'https://*']
 else:
     CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS.split(' ')
+
+URL_PREFIX = config('URL_PREFIX', default='', cast=str)
+if URL_PREFIX:
+    URL_PREFIX = f'{URL_PREFIX}/'
+print('URL_PREFIX', URL_PREFIX)
 
 # Application definition
 INSTALLED_APPS = [

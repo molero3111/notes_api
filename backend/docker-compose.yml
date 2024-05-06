@@ -11,6 +11,7 @@ services:  # Defines the services that make up your application.
       - 8000:8000  # Maps port 8000 on the host to port 8000 in the container.
     env_file:  # Specifies the environment file to use.
       - ./.env  # Reads environment variables from the .env file.
+      - ./.env_secrets
     networks:  # Specifies the networks the service should be connected to.
       - notes_manager_network  # Connects this service to the "notes_manager_network" network.
 

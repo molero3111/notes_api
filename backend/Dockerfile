@@ -23,8 +23,8 @@ COPY . .
 # make start_notes_api.sh executable
 RUN chmod +x start_notes_api.sh
 
-# copy wait-for-it.sh
-#COPY ./wait-for-it.sh .
+# command to start gunicorn
+CMD ["./start_notes_api.sh"]
 
 # make wait-for-it.sh executable
 #RUN chmod +x wait-for-it.sh
