@@ -11,7 +11,7 @@ echo "Pushing git commits..."
 git push
 
 # Use provided image name or default
-IMAGE_NAME=$1$DEFAULT_IMAGE_NAME
+IMAGE_NAME=$1-$DEFAULT_IMAGE_NAME
 
 echo "Building image: $IMAGE_NAME"
 
