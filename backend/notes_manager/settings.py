@@ -53,7 +53,6 @@ else:
 URL_PREFIX = config('URL_PREFIX', default='', cast=str)
 if URL_PREFIX:
     URL_PREFIX = f'{URL_PREFIX}/'
-print('URL_PREFIX', URL_PREFIX)
 
 # Application definition
 INSTALLED_APPS = [
@@ -106,11 +105,14 @@ WSGI_APPLICATION = 'notes_manager.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
+        'HOST': config('POSTGRES_HOST', default='notes-db', cast=str),
+        'PORT': config('POSTGRES_PORT', default='5432', cast=str),
+        'NAME': config('POSTGRES_DB', default='notes_db', cast=str),
+        'USER': config('POSTGRES_USER', default='notes_admin', cast=str),
+        'PASSWORD': config('POSTGRES_PASSWORD', default='9874593784530', cast=str),
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -158,4 +160,30 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
+}
+
+REDIS_HOST = config('REDIS_HOST', default='redis', cast=str)
+REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
+REDIS_DEFAULT_DB = config('REDIS_DEFAULT_DB', default=0, cast=int)
+REDIS_APP_DB = config('REDIS_APP_DB', default=0, cast=int)
+REDIS_DEFAULT_KEY_EXPIRATION = config('REDIS_DEFAULT_KEY_EXPIRATION', default=3600, cast=int)
+REDIS_PASSWORD = config('REDIS_PASSWORD', default='1234', cast=str)
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DEFAULT_DB}',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'PASSWORD': REDIS_PASSWORD,
+        }
+    },
+    'system': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_APP_DB}',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'PASSWORD': REDIS_PASSWORD,
+        }
+    }
 }
