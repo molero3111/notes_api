@@ -14,8 +14,8 @@ db.sqlite3
 # Ignore environment-specific settings
 .env
 .env_secrets
-kubernetes/django/config-map.yml
-kubernetes/django/ingress.yml
+kubernetes/api/config-map.yml
+kubernetes/api/ingress.yml
 
 # Ignore virtual environment
 notes_manager_venv/
