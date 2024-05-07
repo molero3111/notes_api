@@ -11,7 +11,13 @@ echo "Pushing git commits..."
 git push
 
 # Use provided image name or default
-IMAGE_NAME=$1-$DEFAULT_IMAGE_NAME
+IMAGE_NAME=$1
+
+# Check for empty image name
+if [ -z "$IMAGE_NAME" ]; then
+    echo "No image name provided, using default: $DEFAULT_IMAGE_NAME"
+    IMAGE_NAME=$DEFAULT_IMAGE_NAME
+fi
 
 echo "Building image: $IMAGE_NAME"
 
