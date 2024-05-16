@@ -21,7 +21,13 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # make start_notes_api.sh executable
-RUN chmod +x start_notes_api.sh
+# RUN chmod +x start_notes_api.sh
 
 # command to start gunicorn
-CMD ["./start_notes_api.sh"]
+# CMD ["./start_notes_api.sh"]
+
+# make wait-for-it.sh executable
+RUN chmod +x wait-for-it.sh
+
+# run wait-for-it.sh
+ENTRYPOINT ["./wait-for-it.sh", "notes-db:5432", "--"]

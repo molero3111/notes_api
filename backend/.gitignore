@@ -14,13 +14,9 @@ db.sqlite3
 # Ignore environment-specific settings
 .env
 .env_secrets
-kubernetes/api/config-map.yml
-kubernetes/api/ingress.yml
 
 # Ignore virtual environment
 notes_manager_venv/
-
-nginx/nginx.conf
 
 # Ignore user-uploaded media files (if you're using Django's media handling)
 media/
