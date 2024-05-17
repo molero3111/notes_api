@@ -13,7 +13,7 @@ db.sqlite3
 
 # Ignore environment-specific settings
 .env
-.env_secrets
+.env.secrets
 
 # Ignore virtual environment
 notes_manager_venv/
