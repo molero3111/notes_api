@@ -2,7 +2,6 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "homepage": "/notes-app/",
   "author": "Emmanuel Molero",
   "dependencies": {
     "@reduxjs/toolkit": "^2.2.3",
