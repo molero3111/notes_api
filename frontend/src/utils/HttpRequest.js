@@ -1,16 +1,13 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-    baseURL: 'http://127.0.0.1:8000/api'
+    baseURL: process.env.REACT_APP_API_URL
 });
-
 
 export async function sendRequest(method, url, data = {}, authenticate = true) {
     try {
         let token = null;
-        let headers = {
-            // 'Accept': 'application/json' // Add Accept header
-        };
+        let headers = {}
         if (authenticate) {
             token = localStorage.getItem('token');
             if (!token) {
