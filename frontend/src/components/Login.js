@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useDispatch } from 'react-redux';
 import { login } from '../store/Authentication/AuthActions';
 import { useNavigate } from 'react-router-dom';
+import { sendRequest } from '../utils/HttpRequest';
 
 const Login = () => {
     const [username, setUsername] = useState('');
@@ -14,11 +15,11 @@ const Login = () => {
     const handleLogin = async (e) => {
         e.preventDefault();
         try {
-            const response = await axios.post('http://127.0.0.1:8000/api/login/', {
+            const responseData = await sendRequest('POST', '/login/', {
                 username,
                 password
-            });
-            const token = response.data.token;
+            }, false);
+            const token = responseData.token;
             dispatch(login(token));
             localStorage.setItem('token', token);
             navigate('/notes');

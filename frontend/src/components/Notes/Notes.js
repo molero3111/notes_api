@@ -17,7 +17,7 @@ const Notes = () => {
 
   return (
     <div className="container">
-      <h1 className="mt-4 text-center">Notes</h1>
+      <h1 className="mt-4 text-center text-white">Notes</h1>
       <p className="text-center">
         <NavLink to="/notes/new/" className="btn btn-success me-2 mt-3 text-center">Add Note</NavLink>
       </p>

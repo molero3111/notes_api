@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  notes-react-app:
+    build:
+      context: ./
+    restart: always
+    expose:
+      - 3000
+    ports:
+      - "${HOST_MACHINE_WEB_PORT:-3000}:3000"  # Map port from host machine or default to 3000
+    env_file:
+      - ./.env
+    networks:
+      - notes_react_app_staging_network
+networks:
+  notes_react_app_staging_network:
+    external: true

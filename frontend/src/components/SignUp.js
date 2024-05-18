@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useDispatch } from 'react-redux';
 import { login } from '../store/Authentication/AuthActions';
 import { useNavigate } from 'react-router-dom';
+import { sendRequest } from '../utils/HttpRequest';
 
 const SignUp = () => {
     const [username, setUsername] = useState('');
@@ -15,12 +16,12 @@ const SignUp = () => {
     const handleSignup = async (e) => {
         e.preventDefault();
         try {
-            const response = await axios.post('http://127.0.0.1:8000/api/register/', {
+            const responseData = await sendRequest('POST', '/register/', {
                 username,
                 email,
                 password
-            });
-            const token = response.data.token;
+            }, false);
+            const token = responseData.token;
             dispatch(login(token));
             localStorage.setItem('token', token);
             navigate('/notes');
