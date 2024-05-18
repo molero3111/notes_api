@@ -4,10 +4,8 @@ WORKDIR /app
 
 RUN npm install -g serve
 
-COPY . .
+COPY build/ .
 
-RUN npm install
+CMD ["serve", "-s", "/app"]
 
-RUN npm run build
 
-CMD ["serve", "-s", "/app/build"]
