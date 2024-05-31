@@ -20,6 +20,12 @@ RUN pip install -r requirements.txt
 # copy project
 COPY . .
 
+# make wait-for-it.sh executable
+RUN chmod +x wait-for-it.sh
+
+# run wait-for-it.sh
+CMD ["./wait-for-it.sh", "notes-db:5432", "--"]
+
 # make start_notes_api.sh executable
 RUN chmod +x start_notes_api.sh
 

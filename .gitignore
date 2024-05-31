@@ -16,7 +16,7 @@ db.sqlite3
 .env.secrets
 
 # Ignore virtual environment
-notes_manager_venv/
+notes_api_venv/
 
 # Ignore user-uploaded media files (if you're using Django's media handling)
 media/

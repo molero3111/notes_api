@@ -4,7 +4,7 @@ services:
   notes-api:
     build:
       context: ./
-      dockerfile: Dockerfile-staging
+      dockerfile: Dockerfile
     restart: always
     command: ./start_notes_api.sh
     expose:
@@ -18,7 +18,7 @@ services:
       - notes-db
       - notes-redis
     networks:
-      - notes_staging_network
+      - notes_api_staging_network
 
   notes-db:
     image: postgis/postgis:13-3.1
@@ -29,7 +29,7 @@ services:
       - ./.env
       - ./.env.secrets
     networks:
-      - notes_staging_network
+      - notes_api_staging_network
 
   notes-redis:
     image: "redis:7.2.1"
@@ -39,11 +39,11 @@ services:
       - ./.env.secrets
     command: redis-server --requirepass ${REDIS_PASSWORD-8878759}
     networks:
-      - notes_staging_network
+      - notes_api_staging_network
 
 volumes:
   postgres_data:
 
 networks:
-  notes_staging_network:
+  notes_api_staging_network:
     external: true
