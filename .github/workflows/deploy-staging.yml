@@ -1,6 +1,6 @@
 # Deploy notes_api to staging VPS when code is merged into the staging branch.
 # - Builds and pushes the Docker image to Docker Hub (CI does the build; VPS stays light).
-# - SSHs into the VPS and runs: git pull && docker compose pull && docker compose up -d
+# - SSHs into the VPS and runs: checkout staging, git pull, docker compose pull, up -d
 #
 # Required GitHub repository secrets (Settings → Secrets and variables → Actions):
 #   DOCKERHUB_USERNAME   - Docker Hub username
@@ -56,6 +56,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/notes_crud/backend
-            git pull
+            git fetch origin
+            git checkout staging
+            git pull origin staging
             docker compose -f docker-compose-staging.yml pull
             docker compose -f docker-compose-staging.yml up -d
