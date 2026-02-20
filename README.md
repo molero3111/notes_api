@@ -33,13 +33,7 @@ cp .env.example .env
 cp .env.secrets.example .env.secrets
 ```
 
-4. Create notes_api_network:
-
-```bash
-docker network create notes_api_network
-```
-
-5. Build and run docker containers:
+4. Build and run docker containers:
 
 ```bash
 docker compose -p local-notes-api up --build

@@ -1,24 +1,26 @@
 services:
-  notes-api:
+  api-notes:
     image: molero3111/notes-api:latest
+    container_name: api-notes
     pull_policy: always
     restart: always
-    command: ["./wait-for-it.sh", "notes-db:5432", "--", "./start_notes_api.sh"]
+    command: ["./wait-for-it.sh", "db-notes:5432", "--", "./start_notes_api.sh"]
     expose:
       - 8000
     ports:
-      - "${HOST_MACHINE_WEB_PORT:-8000}:8000"  # Map port from host machine or default to 8000
+      - "${HOST_MACHINE_WEB_PORT:-8000}:8000"
     env_file:
       - ./.env
       - ./.env.secrets
     depends_on:
-      - notes-db
-      - notes-redis
+      - db-notes
+      - redis-notes
     networks:
       - notes_api_staging_network
 
-  notes-db:
+  db-notes:
     image: postgis/postgis:13-3.1
+    container_name: db-notes
     restart: always
     volumes:
       - postgres_data:/var/lib/postgresql/data/
@@ -28,8 +30,9 @@ services:
     networks:
       - notes_api_staging_network
 
-  notes-redis:
+  redis-notes:
     image: "redis:7.2.1"
+    container_name: redis-notes
     restart: always
     env_file:
       - ./.env
