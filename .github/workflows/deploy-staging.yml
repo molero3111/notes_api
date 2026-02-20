@@ -3,7 +3,7 @@
 # - SSHs into the VPS and runs: checkout staging, git pull, docker compose pull, up -d
 #
 # Secrets: use the "notes env" environment (Settings → Environments → notes env) or add as Repository secrets.
-#   DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, VPS_HOST, VPS_USER, SSH_PRIVATE_KEY
+#   DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, VPS_HOST, VPS_USER, VPS_SSH_PORT, SSH_PRIVATE_KEY
 
 name: Deploy to Staging
 
@@ -64,6 +64,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
           script: |
             cd ~/notes_crud/backend
             git fetch origin
@@ -71,3 +72,4 @@ jobs:
             git pull origin staging
             docker compose -f docker-compose-staging.yml pull
             docker compose -f docker-compose-staging.yml up -d
+            docker system prune -f
