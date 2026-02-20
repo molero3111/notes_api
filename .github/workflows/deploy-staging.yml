@@ -1,6 +1,6 @@
 # Deploy notes_api to staging VPS when code is merged into the staging branch.
-# - Builds and pushes the Docker image to Docker Hub
-# - SSHs into the VPS and runs: git pull && docker compose up --build -d
+# - Builds and pushes the Docker image to Docker Hub (CI does the build; VPS stays light).
+# - SSHs into the VPS and runs: git pull && docker compose pull && docker compose up -d
 #
 # Required GitHub repository secrets (Settings → Secrets and variables → Actions):
 #   DOCKERHUB_USERNAME   - Docker Hub username
@@ -17,7 +17,7 @@ on:
       - staging
 
 env:
-  DOCKER_IMAGE: molero3111/app_images:notes.staging
+  DOCKER_IMAGE: molero3111/notes-api:latest
 
 jobs:
   build-and-push:
@@ -57,4 +57,5 @@ jobs:
           script: |
             cd ~/notes_crud/backend
             git pull
-            docker compose -f docker-compose-staging.yml up --build -d
+            docker compose -f docker-compose-staging.yml pull
+            docker compose -f docker-compose-staging.yml up -d

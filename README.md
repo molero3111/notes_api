@@ -49,8 +49,8 @@ docker compose -p local-notes-api up --build
 
 Merges (or pushes) to the `staging` branch trigger an automated deploy:
 
-1. The Docker image is built and pushed to Docker Hub (`molero3111/app_images:notes.staging`).
-2. The workflow SSHs into the VPS and runs `git pull` then `docker compose -f docker-compose-staging.yml up --build -d` in `~/notes_crud/backend`.
+1. The workflow builds the Docker image and pushes it to Docker Hub (`molero3111/notes-api:latest`), so the VPS does no build and uses fewer resources.
+2. It then SSHs into the VPS and runs `git pull`, `docker compose pull`, and `docker compose up -d` in `~/notes_crud/backend`.
 
 **One-time setup**
 
@@ -61,4 +61,4 @@ Merges (or pushes) to the `staging` branch trigger an automated deploy:
    - `VPS_USER` – SSH user (e.g. `ubuntu`)
    - `SSH_PRIVATE_KEY` – paste the full private key (the matching public key must be in the VPS `~/.ssh/authorized_keys`)
 
-2. On the VPS, ensure the app lives at `~/notes_crud/backend` (clone the repo there if needed) and that Docker/Docker Compose are installed.
+2. On the VPS, ensure the app lives at `~/notes_crud/backend` (clone the repo there if needed) and that Docker/Docker Compose are installed. The staging compose file uses the image from Docker Hub; no local build is required.

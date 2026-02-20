@@ -1,8 +1,7 @@
 services:
   notes-api:
-    build:
-      context: ./
-      dockerfile: Dockerfile
+    image: molero3111/notes-api:latest
+    pull_policy: always
     restart: always
     command: ["./wait-for-it.sh", "notes-db:5432", "--", "./start_notes_api.sh"]
     expose:
