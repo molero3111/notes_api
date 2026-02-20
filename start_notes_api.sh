@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Parse command line arguments
 environment="production"  # Default to production
@@ -19,8 +20,8 @@ done
 python manage.py makemigrations
 python manage.py migrate
 
-# Load fixture data
-python manage.py loaddata fixtures/*
+# Load fixture data (optional; ignore errors if no fixtures or invalid)
+python manage.py loaddata fixtures/* 2>/dev/null || true
 
 # Collect static files
 python manage.py collectstatic --no-input

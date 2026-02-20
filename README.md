@@ -44,3 +44,21 @@ docker network create notes_api_network
 ```bash
 docker compose -p local-notes-api up --build
 ```
+
+## Staging deployment (GitHub Actions)
+
+Merges (or pushes) to the `staging` branch trigger an automated deploy:
+
+1. The workflow builds the Docker image and pushes it to Docker Hub (`molero3111/notes-api:latest`), so the VPS does no build and uses fewer resources.
+2. It then SSHs into the VPS and runs `git pull`, `docker compose pull`, and `docker compose up -d` in `~/notes_crud/backend`.
+
+**One-time setup**
+
+1. In the repo: **Settings → Secrets and variables → Actions**, add:
+   - `DOCKERHUB_USERNAME` – your Docker Hub username
+   - `DOCKERHUB_TOKEN` – a Docker Hub [access token](https://hub.docker.com/settings/security)
+   - `VPS_HOST` – VPS IP or hostname
+   - `VPS_USER` – SSH user (e.g. `ubuntu`)
+   - `SSH_PRIVATE_KEY` – paste the full private key (the matching public key must be in the VPS `~/.ssh/authorized_keys`)
+
+2. On the VPS, ensure the app lives at `~/notes_crud/backend` (clone the repo there if needed) and that Docker/Docker Compose are installed. The staging compose file uses the image from Docker Hub; no local build is required.

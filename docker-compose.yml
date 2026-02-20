@@ -1,5 +1,3 @@
-version: '3.8'  # Specifies the version of the Docker Compose file format being used.
-
 services:  # Defines the services that make up your application.
 
   web:  # Configuration for the web service.
