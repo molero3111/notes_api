@@ -59,6 +59,7 @@ Merges (or pushes) to the `staging` branch trigger an automated deploy:
    - `DOCKERHUB_TOKEN` – a Docker Hub [access token](https://hub.docker.com/settings/security)
    - `VPS_HOST` – VPS IP or hostname
    - `VPS_USER` – SSH user (e.g. `ubuntu`)
+   - `VPS_SSH_PORT` – SSH port (e.g. `2111` if not using 22)
    - `SSH_PRIVATE_KEY` – paste the full private key (the matching public key must be in the VPS `~/.ssh/authorized_keys`)
 
 2. On the VPS, ensure the app lives at `~/notes_crud/backend` (clone the repo there if needed) and that Docker/Docker Compose are installed. The staging compose file uses the image from Docker Hub; no local build is required.
