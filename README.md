@@ -8,6 +8,8 @@ Notes CRUD API.
 
 **API docs (Postman):** [Notes API collection](https://www.postman.com/molero3111/workspace/emmanuel-s-workspace/collection/9720967-e6037335-9f6e-4104-aa8a-82b951fd8e30?action=share&creator=9720967&active-environment=9720967-ebb21adc-4590-4fa2-8e30-9e219cff367f). You may need to create your own env, once created, set the collection variable **url** to `https://emmanuelcodinghub.com/notes/api`, and set **token** after logging in or registering so authenticated requests work.
 
+**Bugs, suggestions, and ideas for improvement:** please open an issue in [GitHub Issues](https://github.com/molero3111/notes_api/issues).
+
 ##  Runtimes, engines, tools and requirements
 
 - **Python**: 3.8.0
