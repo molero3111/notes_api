@@ -29,6 +29,8 @@ jobs:
   build:
     name: Build and push image
     runs-on: ubuntu-latest
+    # Only staging builds and deploys; a manual run from another branch skips both jobs
+    if: github.ref == 'refs/heads/staging'
     permissions:
       contents: read
       packages: write
@@ -51,10 +53,9 @@ jobs:
         with:
           context: .
           push: true
-          # :homelab tracks what the homelab runs, so it only moves on staging (empty lines are skipped)
           tags: |
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ github.ref == 'refs/heads/staging' && format('{0}:homelab', env.IMAGE_NAME) || '' }}
+            ${{ env.IMAGE_NAME }}:homelab
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -63,7 +64,7 @@ jobs:
     name: Deploy on homelab
     runs-on: ubuntu-latest
     needs: build
-    # Manual runs from other branches build the image but only staging is deployed
+    # Redundant with the build guard (needs: build), kept so deploy stays staging-only on its own
     if: github.ref == 'refs/heads/staging'
     environment: homelab
     steps:
