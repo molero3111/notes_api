@@ -51,9 +51,10 @@ jobs:
         with:
           context: .
           push: true
+          # :homelab tracks what the homelab runs, so it only moves on staging (empty lines are skipped)
           tags: |
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.IMAGE_NAME }}:homelab
+            ${{ github.ref == 'refs/heads/staging' && format('{0}:homelab', env.IMAGE_NAME) || '' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
