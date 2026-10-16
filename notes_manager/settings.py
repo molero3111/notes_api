@@ -50,6 +50,17 @@ if CORS_ALLOWED_ORIGINS == '*':
 else:
     CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS.split(' ')
 
+# Trust X-Forwarded-Proto from the reverse proxy so request.is_secure() and built URLs use https.
+# Only enable when the proxy always overwrites the client-supplied header, otherwise clients can spoof https.
+TRUST_X_FORWARDED_PROTO = config('TRUST_X_FORWARDED_PROTO', default=False, cast=bool)
+if TRUST_X_FORWARDED_PROTO:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Send session and CSRF cookies over https only. Enable when the site is served exclusively over https.
+SECURE_COOKIES = config('SECURE_COOKIES', default=False, cast=bool)
+SESSION_COOKIE_SECURE = SECURE_COOKIES
+CSRF_COOKIE_SECURE = SECURE_COOKIES
+
 URL_PREFIX = config('URL_PREFIX', default='', cast=str)
 if URL_PREFIX:
     URL_PREFIX = f'{URL_PREFIX}/'
