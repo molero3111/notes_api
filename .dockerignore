@@ -1,3 +1,6 @@
 notes_manager_venv/
 static/
 staticfiles/
+.git/
+.env
+.env.secrets
