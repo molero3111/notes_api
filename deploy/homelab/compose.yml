@@ -1,0 +1,72 @@
+# Homelab deployment of notes_api.
+# Reference copy: installed on the server at /srv/apps/notes-api/compose.yml and run as
+# compose project "notes-api". .env and .env.secrets live next to it on the server.
+#
+# The API publishes no host ports. The web app's nginx reaches it as http://notes-api:8000
+# over the external "notes" network, which must exist beforehand (docker network create notes).
+#
+# IMAGE_TAG must be set when running compose, e.g. IMAGE_TAG=<git sha> docker compose up -d
+
+services:
+  api:
+    image: ghcr.io/molero3111/notes-api:${IMAGE_TAG:?IMAGE_TAG must be set}
+    restart: unless-stopped
+    env_file:
+      - ./.env
+      - ./.env.secrets
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      # Root of the DRF router, no auth needed. "localhost" must be in ALLOWED_HOSTS.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      default:
+      notes:
+        aliases:
+          - notes-api
+
+  db:
+    image: postgis/postgis:13-3.1
+    restart: unless-stopped
+    env_file:
+      - ./.env
+      - ./.env.secrets
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      default:
+        aliases:
+          - notes-api-db
+
+  redis:
+    image: redis:7.2.1
+    restart: unless-stopped
+    env_file:
+      - ./.env.secrets
+    # The password comes from the container env (.env.secrets) and has no fallback
+    command: ["sh", "-c", "exec redis-server --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set}\""]
+    networks:
+      default:
+        aliases:
+          - notes-api-redis
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+  notes:
+    external: true

@@ -16,8 +16,12 @@ do
     esac
 done
 
+# Generate migrations only in local development; other environments apply the committed ones
+if [ "$environment" = "local" ]; then
+    python manage.py makemigrations
+fi
+
 # Run Django migrations
-python manage.py makemigrations
 python manage.py migrate
 
 # Load fixture data (optional; ignore errors if no fixtures or invalid)
