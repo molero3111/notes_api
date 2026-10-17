@@ -39,3 +39,15 @@ class NoteSerializer(serializers.ModelSerializer):
         if len(value) > max_length:
             raise serializers.ValidationError(f'Ensure this field has no more than {max_length} characters.')
         return value
+
+    def validate_tags(self, value):
+        return self._validate_count(value, settings.NOTE_MAX_TAGS, 'tags')
+
+    def validate_categories(self, value):
+        return self._validate_count(value, settings.NOTE_MAX_CATEGORIES, 'categories')
+
+    @staticmethod
+    def _validate_count(value, max_count, label):
+        if len(value) > max_count:
+            raise serializers.ValidationError(f'A note can have at most {max_count} {label}.')
+        return value
