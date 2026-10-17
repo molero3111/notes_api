@@ -1,4 +1,6 @@
+from django.conf import settings
 from rest_framework import viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -12,6 +14,10 @@ class NoteViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
+        # Archived notes count too: the quota bounds what a user stores, not what they see
+        max_notes = settings.NOTES_MAX_PER_USER
+        if Note.objects.filter(user=self.request.user).count() >= max_notes:
+            raise ValidationError({'detail': f'Note limit reached: each user can keep at most {max_notes} notes.'})
         serializer.save(user=self.request.user)
 
     def get_serializer_class(self):
