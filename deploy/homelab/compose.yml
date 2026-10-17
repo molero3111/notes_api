@@ -53,7 +53,9 @@ services:
     image: postgis/postgis:13-3.1
     restart: unless-stopped
     # shared_buffers default is 128 MB, which alone would not fit; first boot (initdb + PostGIS) is the peak
-    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=20"]
+    # WAL is capped too (default max_wal_size is 1 GB), so it can't fill the 300 MB data volume
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=20",
+              "-c", "max_wal_size=64MB", "-c", "min_wal_size=32MB"]
     mem_limit: 256m
     memswap_limit: 256m
     cpus: 1
@@ -64,7 +66,7 @@ services:
       - ./.env
       - ./.env.secrets
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - postgres_data_capped:/var/lib/postgresql/data/
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
@@ -98,7 +100,18 @@ services:
           - notes-api-redis
 
 volumes:
-  postgres_data:
+  # Postgres data is capped at 300 MB by a fixed-size ext4 image that the host loop-mounts at
+  # /srv/volumes/notes-api-db. Docker can't size-limit a local volume on ext4 by itself.
+  # The bind targets the data/ subfolder, which only exists inside the mounted image: if the mount
+  # is missing, the db container fails to start instead of initialising an empty database on the
+  # root disk. When the image is full Postgres can't write WAL and stops, so the host keeps ext4
+  # reserved blocks that an admin can release (tune2fs -r 0) to bring it back.
+  postgres_data_capped:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /srv/volumes/notes-api-db/data
 
 networks:
   default:
