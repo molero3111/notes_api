@@ -51,10 +51,11 @@ services:
 
   scheduler:
     # Weekly purge of notes not updated within NOTES_RETENTION_DAYS (purge_old_notes). It also runs once
-    # at every start/redeploy, which is harmless since the command is idempotent.
+    # at every start/redeploy, which is harmless since the command is idempotent. A failed run is
+    # retried after an hour instead of waiting a week.
     image: ghcr.io/molero3111/notes-api:${IMAGE_TAG:?IMAGE_TAG must be set}
     restart: unless-stopped
-    command: ["sh", "-c", "while true; do python manage.py purge_old_notes; sleep 604800; done"]
+    command: ["sh", "-c", "while true; do if python manage.py purge_old_notes; then sleep 604800; else sleep 3600; fi; done"]
     # tini as PID 1 so docker stop terminates the sleep loop right away
     init: true
     env_file:
