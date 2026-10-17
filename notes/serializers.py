@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from django.conf import settings
 from rest_framework import serializers
 
@@ -41,7 +43,10 @@ class NoteSerializer(serializers.ModelSerializer):
         return value
 
     def to_internal_value(self, data):
-        # Cap the id lists before DRF resolves them: it runs one query per submitted id
+        # Cap the id lists before DRF resolves them: it runs one query per submitted id.
+        # A non-object body (e.g. a JSON array) is left to DRF, which rejects it with a 400.
+        if not isinstance(data, Mapping):
+            return super().to_internal_value(data)
         errors = {}
         for field, max_count in (('tags', settings.NOTE_MAX_TAGS), ('categories', settings.NOTE_MAX_CATEGORIES)):
             ids = data.getlist(field) if hasattr(data, 'getlist') else data.get(field)

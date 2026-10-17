@@ -84,6 +84,11 @@ class NoteLimitsTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('tags', response.data)
 
+    def test_non_object_body_is_rejected_with_400(self):
+        for body in ([1, 2], 'x'):
+            response = self.client.post(NOTES_URL, body, format='json')
+            self.assertEqual(response.status_code, 400, body)
+
     def test_note_exposes_timestamps(self):
         response = self.create_note()
         self.assertIn('created_at', response.data)
