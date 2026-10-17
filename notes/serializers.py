@@ -40,14 +40,13 @@ class NoteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f'Ensure this field has no more than {max_length} characters.')
         return value
 
-    def validate_tags(self, value):
-        return self._validate_count(value, settings.NOTE_MAX_TAGS, 'tags')
-
-    def validate_categories(self, value):
-        return self._validate_count(value, settings.NOTE_MAX_CATEGORIES, 'categories')
-
-    @staticmethod
-    def _validate_count(value, max_count, label):
-        if len(value) > max_count:
-            raise serializers.ValidationError(f'A note can have at most {max_count} {label}.')
-        return value
+    def to_internal_value(self, data):
+        # Cap the id lists before DRF resolves them: it runs one query per submitted id
+        errors = {}
+        for field, max_count in (('tags', settings.NOTE_MAX_TAGS), ('categories', settings.NOTE_MAX_CATEGORIES)):
+            ids = data.getlist(field) if hasattr(data, 'getlist') else data.get(field)
+            if isinstance(ids, (list, tuple)) and len(ids) > max_count:
+                errors[field] = [f'A note can have at most {max_count} {field}.']
+        if errors:
+            raise serializers.ValidationError(errors)
+        return super().to_internal_value(data)

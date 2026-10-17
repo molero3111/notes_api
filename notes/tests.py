@@ -75,6 +75,15 @@ class NoteLimitsTests(APITestCase):
         self.assertEqual(too_many_categories.status_code, 400)
         self.assertIn('categories', too_many_categories.data)
 
+    @override_settings(NOTE_MAX_TAGS=2)
+    def test_tag_cap_is_checked_before_ids_are_resolved(self):
+        # 1000 ids would be 1000 lookups; the length check must reject the request first
+        with self.assertNumQueries(1):  # only the token auth lookup (token joined with its user)
+            response = self.client.post(NOTES_URL, {'title': 't', 'content': 'c', 'tags': list(range(1, 1001)),
+                                                    'categories': []}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('tags', response.data)
+
     def test_note_exposes_timestamps(self):
         response = self.create_note()
         self.assertIn('created_at', response.data)

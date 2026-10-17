@@ -39,7 +39,8 @@ class Command(BaseCommand):
             batch = list(old_notes.values_list('pk', flat=True)[:options['batch_size']])
             if not batch:
                 break
-            Note.objects.filter(pk__in=batch, updated_at__lt=cutoff).only('pk').delete()
-            deleted += len(batch)
+            # Re-checking the cutoff spares a note edited since it was selected; count what was deleted
+            _, per_model = Note.objects.filter(pk__in=batch, updated_at__lt=cutoff).only('pk').delete()
+            deleted += per_model.get(Note._meta.label, 0)
 
         self.stdout.write(f'Deleted {deleted} notes not updated since {cutoff:%Y-%m-%d %H:%M} UTC.')
