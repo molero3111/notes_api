@@ -1,9 +1,20 @@
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.db import transaction
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Note, Category, Tag
 from .serializers import NoteListSerializer, NoteSerializer, CategoryListSerializer, TagListSerializer
+
+
+class IsStaffOrReadOnly(BasePermission):
+    """Tags and categories are shared by all users, so only staff may change them."""
+
+    def has_permission(self, request, view):
+        return request.method in SAFE_METHODS or request.user.is_staff
 
 
 class NoteViewSet(viewsets.ModelViewSet):
@@ -12,7 +23,14 @@ class NoteViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        # Archived notes count too: the quota bounds what a user stores, not what they see.
+        # Locking the user row serialises concurrent creates, so parallel requests can't exceed it.
+        max_notes = settings.NOTES_MAX_PER_USER
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=self.request.user.pk)
+            if Note.objects.filter(user=self.request.user).count() >= max_notes:
+                raise ValidationError({'detail': f'Note limit reached: each user can keep at most {max_notes} notes.'})
+            serializer.save(user=self.request.user)
 
     def get_serializer_class(self):
         if self.action == 'list' or self.action == 'retrieve':
@@ -48,10 +66,10 @@ class NoteViewSet(viewsets.ModelViewSet):
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategoryListSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsStaffOrReadOnly]
 
 
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagListSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsStaffOrReadOnly]
