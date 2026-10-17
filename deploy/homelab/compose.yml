@@ -79,7 +79,8 @@ services:
   redis:
     image: redis:7.2.1
     restart: unless-stopped
-    # Cache only: maxmemory with LRU eviction keeps it (and its RDB snapshot on disk) bounded
+    # Cache only: bounded in memory by maxmemory + LRU eviction, and nothing on disk (persistence
+    # off; tmpfs on /data replaces the image's anonymous volume)
     mem_limit: 64m
     memswap_limit: 64m
     cpus: 0.5
@@ -88,7 +89,9 @@ services:
     env_file:
       - ./.env.secrets
     # The password comes from the container env (.env.secrets) and has no fallback
-    command: ["sh", "-c", "exec redis-server --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set}\" --maxmemory 32mb --maxmemory-policy allkeys-lru"]
+    command: ["sh", "-c", "exec redis-server --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set}\" --maxmemory 32mb --maxmemory-policy allkeys-lru --save '' --appendonly no"]
+    tmpfs:
+      - /data:size=1m
     networks:
       default:
         aliases:
