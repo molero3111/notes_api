@@ -174,6 +174,14 @@ REST_FRAMEWORK = {
     ],
 }
 
+# Abuse limits for notes
+NOTE_MAX_CONTENT_LENGTH = config('NOTE_MAX_CONTENT_LENGTH', default=10000, cast=int)
+NOTES_MAX_PER_USER = config('NOTES_MAX_PER_USER', default=500, cast=int)
+NOTE_MAX_TAGS = config('NOTE_MAX_TAGS', default=20, cast=int)
+NOTE_MAX_CATEGORIES = config('NOTE_MAX_CATEGORIES', default=20, cast=int)
+# purge_old_notes deletes notes not updated within this many days
+NOTES_RETENTION_DAYS = config('NOTES_RETENTION_DAYS', default=30, cast=int)
+
 REDIS_HOST = config('REDIS_HOST', default='redis', cast=str)
 REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
 REDIS_DEFAULT_DB = config('REDIS_DEFAULT_DB', default=0, cast=int)
