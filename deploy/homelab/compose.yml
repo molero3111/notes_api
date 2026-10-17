@@ -49,6 +49,27 @@ services:
         aliases:
           - notes-api
 
+  scheduler:
+    # Weekly purge of notes not updated within NOTES_RETENTION_DAYS (purge_old_notes). It also runs once
+    # at every start/redeploy, which is harmless since the command is idempotent.
+    image: ghcr.io/molero3111/notes-api:${IMAGE_TAG:?IMAGE_TAG must be set}
+    restart: unless-stopped
+    command: ["sh", "-c", "while true; do python manage.py purge_old_notes; sleep 604800; done"]
+    # tini as PID 1 so docker stop terminates the sleep loop right away
+    init: true
+    env_file:
+      - ./.env
+      - ./.env.secrets
+    depends_on:
+      # api runs migrate before it reports healthy, so the schema is current before the first purge
+      api:
+        condition: service_healthy
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.25
+    pids_limit: 20
+    logging: *logging
+
   db:
     image: postgis/postgis:13-3.1
     restart: unless-stopped
