@@ -6,11 +6,28 @@
 # over the external "notes" network, which must exist beforehand (docker network create notes).
 #
 # IMAGE_TAG must be set when running compose, e.g. IMAGE_TAG=<git sha> docker compose up -d
+#
+# Resource limits are sized from measurements of this stack: steady state, a create/list load
+# test, and a first boot on an empty volume. Swap is disabled (memswap_limit = mem_limit), so going
+# over the limit OOM-kills the container and restart: unless-stopped brings it back.
+
+x-logging: &logging
+  # Cap container logs at 30 MB per service instead of letting json-file grow without bound
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   api:
     image: ghcr.io/molero3111/notes-api:${IMAGE_TAG:?IMAGE_TAG must be set}
     restart: unless-stopped
+    # ~65 MiB steady with one gunicorn worker; startup (migrate, collectstatic) peaks ~170 MiB
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 1
+    pids_limit: 100
+    logging: *logging
     env_file:
       - ./.env
       - ./.env.secrets
@@ -35,6 +52,14 @@ services:
   db:
     image: postgis/postgis:13-3.1
     restart: unless-stopped
+    # shared_buffers default is 128 MB, which alone would not fit; first boot (initdb + PostGIS) is the peak
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=20"]
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 1
+    pids_limit: 100
+    shm_size: 64m
+    logging: *logging
     env_file:
       - ./.env
       - ./.env.secrets
@@ -54,10 +79,16 @@ services:
   redis:
     image: redis:7.2.1
     restart: unless-stopped
+    # Cache only: maxmemory with LRU eviction keeps it (and its RDB snapshot on disk) bounded
+    mem_limit: 64m
+    memswap_limit: 64m
+    cpus: 0.5
+    pids_limit: 50
+    logging: *logging
     env_file:
       - ./.env.secrets
     # The password comes from the container env (.env.secrets) and has no fallback
-    command: ["sh", "-c", "exec redis-server --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set}\""]
+    command: ["sh", "-c", "exec redis-server --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set}\" --maxmemory 32mb --maxmemory-policy allkeys-lru"]
     networks:
       default:
         aliases:
