@@ -84,7 +84,8 @@ class LoginThrottle(NotesRateThrottle):
     def get_cache_key(self, request, view):
         username = request.data.get('username', '') if hasattr(request.data, 'get') else ''
         # Hashed so a huge username can't write huge Redis keys and push other throttles out of the cache
-        digest = hashlib.sha256(str(username).strip().lower().encode()).hexdigest()[:32]
+        # surrogatepass: JSON can carry lone surrogates, which plain UTF-8 encoding rejects
+        digest = hashlib.sha256(str(username).strip().lower().encode('utf-8', 'surrogatepass')).hexdigest()[:32]
         return self.ident_cache_key(request, suffix=f'|{digest}')
 
 

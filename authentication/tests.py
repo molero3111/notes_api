@@ -97,6 +97,12 @@ class RegisterThrottleTests(ThrottleTestCase):
         retry_after = int(self.register('d')['Retry-After'])
         self.assertAlmostEqual(retry_after, 14 * 3600, delta=120)
 
+    @override_settings(DB_WRITE_GUARD_PATH='/', DB_WRITE_GUARD_MIN_FREE_MB=1024 ** 3)
+    def test_registration_is_refused_when_storage_is_full(self):
+        response = self.register('u1')
+        self.assertEqual(response.status_code, 507)
+        self.assertFalse(User.objects.filter(username='u1').exists())
+
     @override_settings(MAX_USERS=2)
     def test_registration_closes_at_max_users(self):
         User.objects.create_user(username='a', password='x')
@@ -146,6 +152,11 @@ class LoginThrottleTests(ThrottleTestCase):
         self.assertLess(len(key_for('x' * 100000)), 200)
         self.assertEqual(key_for('Alice'), key_for(' alice '))
         self.assertNotEqual(key_for('alice'), key_for('bob'))
+
+    def test_lone_surrogate_username_is_a_400(self):
+        response = self.client.post('/api/login/', '{"username": "\\ud800", "password": "x"}',
+                                    content_type='application/json', HTTP_CF_CONNECTING_IP='203.0.113.1')
+        self.assertEqual(response.status_code, 400)
 
     def test_malformed_login_body_is_a_400_not_a_cache_warning(self):
         with self.assertNoLogs('notes_manager.throttling', level='WARNING'):
