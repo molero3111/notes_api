@@ -1,5 +1,6 @@
 from datetime import timedelta
 from io import StringIO
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.management import CommandError, call_command
@@ -161,3 +162,66 @@ class PurgeOldNotesTests(APITestCase):
         note = self.make_note(10)
         call_command('purge_old_notes', '--days', '7', stdout=StringIO())
         self.assertFalse(Note.objects.filter(pk=note.pk).exists())
+
+
+# Guard values: 1 MB is always exceeded by a PostGIS database, 1 TB never is
+ALWAYS_FULL = {'DB_WRITE_GUARD_MAX_MB': 1, 'DB_WRITE_GUARD_CACHE_SECONDS': 0}
+NEVER_FULL = {'DB_WRITE_GUARD_MAX_MB': 1024 * 1024, 'DB_WRITE_GUARD_CACHE_SECONDS': 0}
+
+
+class StorageGuardTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='alice', password='pw-alice-123')
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {Token.objects.create(user=self.user).key}')
+        self.note = Note.objects.create(user=self.user, title='title', content='some content')
+
+    def create_note(self):
+        return self.client.post(NOTES_URL, {'title': 't', 'content': 'c', 'tags': [], 'categories': []},
+                                format='json')
+
+    def patch_note(self, **data):
+        return self.client.patch(f'{NOTES_URL}{self.note.id}/', data, format='json')
+
+    def test_database_size_is_measured(self):
+        from notes_manager.storage import database_bytes
+        self.assertGreater(database_bytes(), 1024 * 1024)
+
+    @override_settings(DB_WRITE_GUARD_MAX_MB=0)
+    def test_guard_is_off_by_default_setting(self):
+        self.assertEqual(self.create_note().status_code, 201)
+
+    @override_settings(**NEVER_FULL)
+    def test_writes_are_allowed_below_the_limit(self):
+        self.assertEqual(self.create_note().status_code, 201)
+        self.assertEqual(self.patch_note(content='much longer content than before').status_code, 200)
+
+    @override_settings(**ALWAYS_FULL)
+    def test_creating_notes_is_refused_when_full(self):
+        with self.assertLogs('notes_manager.storage', level='WARNING'):
+            response = self.create_note()
+        self.assertEqual(response.status_code, 507)
+        self.assertEqual(Note.objects.count(), 1)
+
+    @override_settings(**ALWAYS_FULL)
+    def test_growing_a_note_is_refused_when_full(self):
+        with self.assertLogs('notes_manager.storage', level='WARNING'):
+            self.assertEqual(self.patch_note(content='some content, now longer').status_code, 507)
+            self.assertEqual(self.patch_note(title='a longer title').status_code, 507)
+        self.note.refresh_from_db()
+        self.assertEqual(self.note.content, 'some content')
+
+    @override_settings(**ALWAYS_FULL)
+    def test_shrinking_archiving_reading_and_deleting_still_work_when_full(self):
+        self.assertEqual(self.patch_note(content='short').status_code, 200)
+        self.assertEqual(self.patch_note(archived=True).status_code, 200)
+        self.assertEqual(self.client.get(NOTES_URL).status_code, 200)
+        self.assertEqual(self.client.delete(f'{NOTES_URL}{self.note.id}/').status_code, 204)
+
+    @override_settings(DB_WRITE_GUARD_MAX_MB=1, DB_WRITE_GUARD_CACHE_SECONDS=60)
+    def test_size_is_cached_between_checks(self):
+        from notes_manager import storage
+        storage.reset_cache()
+        with mock.patch('notes_manager.storage.database_bytes', return_value=10) as measure:
+            self.assertEqual(self.create_note().status_code, 201)
+            self.assertEqual(self.create_note().status_code, 201)
+        self.assertEqual(measure.call_count, 1)
