@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
@@ -8,7 +9,8 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 LOCMEM_CACHE = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
-RATES = {'anon': '1000/min', 'user': '1000/min', 'login': '1000/min', 'register': '1000/hour'}
+RATES = {'anon': '1000/min', 'user': '1000/min', 'login': '1000/min', 'login_ip': '1000/min',
+         'register': '1000/hour'}
 
 
 def rates(**overrides):
@@ -26,8 +28,8 @@ class ThrottleTestCase(APITestCase):
                                                    'email': f'{username}@example.com'},
                                 format='json', HTTP_CF_CONNECTING_IP=ip, **headers)
 
-    def login(self, ip='203.0.113.1', password='wrong'):
-        return self.client.post('/api/login/', {'username': 'alice', 'password': password},
+    def login(self, ip='203.0.113.1', password='wrong', username='alice'):
+        return self.client.post('/api/login/', {'username': username, 'password': password},
                                 format='json', HTTP_CF_CONNECTING_IP=ip)
 
 
@@ -67,6 +69,20 @@ class RegisterThrottleTests(ThrottleTestCase):
         User.objects.filter(pk=old.pk).update(date_joined=timezone.now() - timedelta(days=2))
         self.assertEqual(self.register('new').status_code, 201)
 
+    @override_settings(REGISTRATIONS_PER_DAY=1)
+    def test_daily_cap_response_has_retry_after(self):
+        self.assertEqual(self.register('u1').status_code, 201)
+        response = self.register('u2', ip='198.51.100.7')
+        self.assertEqual(response.status_code, 429)
+        self.assertTrue(0 < int(response['Retry-After']) <= 86400)
+
+    @override_settings(NOTES_THROTTLE_RATES=rates(register='1/hour'))
+    def test_register_groups_ipv6_by_48_prefix(self):
+        # A /56 or /48 is easy to get, so rotating /64s inside it must not reset the sign-up limit
+        self.assertEqual(self.register('u1', ip='2001:db8:1:1::1').status_code, 201)
+        self.assertEqual(self.register('u2', ip='2001:db8:1:ff::1').status_code, 429)
+        self.assertEqual(self.register('u3', ip='2001:db8:2:1::1').status_code, 201)
+
     @override_settings(MAX_USERS=2)
     def test_registration_closes_at_max_users(self):
         User.objects.create_user(username='a', password='x')
@@ -86,12 +102,30 @@ class LoginThrottleTests(ThrottleTestCase):
         super().setUp()
         User.objects.create_user(username='alice', password='right-pass-123')
 
+    def test_successful_login_returns_token(self):
+        response = self.login(password='right-pass-123')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['token'], Token.objects.get(user__username='alice').key)
+
     @override_settings(NOTES_THROTTLE_RATES=rates(login='3/min'))
-    def test_login_is_limited_per_ip(self):
+    def test_login_is_limited_per_ip_and_username(self):
         for _ in range(3):
             self.assertEqual(self.login().status_code, 400)
         self.assertEqual(self.login(password='right-pass-123').status_code, 429)
         self.assertEqual(self.login(ip='198.51.100.7', password='right-pass-123').status_code, 200)
+
+    @override_settings(NOTES_THROTTLE_RATES=rates(login='3/min'))
+    def test_one_users_failures_do_not_block_others_on_a_shared_ip(self):
+        User.objects.create_user(username='carol', password='carol-pass-123')
+        for _ in range(4):
+            self.login()
+        self.assertEqual(self.login(username='carol', password='carol-pass-123').status_code, 200)
+
+    @override_settings(NOTES_THROTTLE_RATES=rates(login_ip='3/min'))
+    def test_login_has_a_looser_per_ip_limit_across_usernames(self):
+        for i in range(3):
+            self.login(username=f'nobody{i}')
+        self.assertEqual(self.login(password='right-pass-123').status_code, 429)
 
 
 class GeneralThrottleTests(ThrottleTestCase):
@@ -116,6 +150,18 @@ class GeneralThrottleTests(ThrottleTestCase):
         self.assertEqual(self.client.get('/api/', HTTP_CF_CONNECTING_IP='2001:db8:1:2::1').status_code, 200)
         self.assertEqual(self.client.get('/api/', HTTP_CF_CONNECTING_IP='2001:db8:1:2:aaaa::ffff').status_code, 429)
         self.assertEqual(self.client.get('/api/', HTTP_CF_CONNECTING_IP='2001:db8:1:3::1').status_code, 200)
+
+    @override_settings(NOTES_THROTTLE_RATES=rates(anon='1/min'))
+    def test_ipv4_mapped_ipv6_is_the_same_client_as_ipv4(self):
+        self.assertEqual(self.client.get('/api/', HTTP_CF_CONNECTING_IP='203.0.113.1').status_code, 200)
+        self.assertEqual(self.client.get('/api/', HTTP_CF_CONNECTING_IP='::ffff:203.0.113.1').status_code, 429)
+
+    @override_settings(NOTES_THROTTLE_RATES=rates(anon='1/min'))
+    def test_cache_outage_fails_open(self):
+        with mock.patch('django.core.cache.cache.get', side_effect=ConnectionError('redis down')), \
+                self.assertLogs('notes_manager.throttling', level='WARNING'):
+            for _ in range(3):
+                self.assertEqual(self.client.get('/api/', HTTP_CF_CONNECTING_IP='203.0.113.1').status_code, 200)
 
     @override_settings(NOTES_THROTTLE_RATES=rates(anon='1/min'), CLIENT_IP_HEADER='')
     def test_without_client_ip_header_remote_addr_is_used_not_forwarded_for(self):

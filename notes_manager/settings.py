@@ -186,7 +186,8 @@ CLIENT_IP_HEADER = config('CLIENT_IP_HEADER', default='', cast=str)
 NOTES_THROTTLE_RATES = {
     'anon': config('THROTTLE_RATE_ANON', default='60/min', cast=str),
     'user': config('THROTTLE_RATE_USER', default='300/min', cast=str),
-    'login': config('THROTTLE_RATE_LOGIN', default='10/min', cast=str),
+    'login': config('THROTTLE_RATE_LOGIN', default='10/min', cast=str),  # per client IP + username
+    'login_ip': config('THROTTLE_RATE_LOGIN_IP', default='60/min', cast=str),  # per client IP
     'register': config('THROTTLE_RATE_REGISTER', default='5/hour', cast=str),
 }
 # Sign-up caps on accounts actually created; 0 disables each
