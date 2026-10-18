@@ -6,6 +6,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
+from notes_manager.storage import refuse_if_storage_full
+
 from .models import Note, Category, Tag
 from .serializers import NoteListSerializer, NoteSerializer, CategoryListSerializer, TagListSerializer
 
@@ -25,6 +27,7 @@ class NoteViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Archived notes count too: the quota bounds what a user stores, not what they see.
         # Locking the user row serialises concurrent creates, so parallel requests can't exceed it.
+        refuse_if_storage_full('note create')
         max_notes = settings.NOTES_MAX_PER_USER
         with transaction.atomic():
             User.objects.select_for_update().get(pk=self.request.user.pk)
@@ -59,6 +62,9 @@ class NoteViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
+        # Postgres writes a new row version for every update, even same-length or flag-only ones,
+        # so when storage is full notes become read-only (deleting still works)
+        refuse_if_storage_full('note update')
         self.perform_update(serializer)
         return Response(serializer.data)
 

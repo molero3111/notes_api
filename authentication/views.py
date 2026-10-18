@@ -12,6 +12,7 @@ from rest_framework.status import (HTTP_400_BAD_REQUEST, HTTP_201_CREATED, HTTP_
                                    HTTP_429_TOO_MANY_REQUESTS)
 from rest_framework.views import APIView
 
+from notes_manager.storage import refuse_if_storage_full
 from notes_manager.throttling import AnonThrottle, LoginIPThrottle, LoginThrottle, RegisterThrottle
 from .serializers import UserSerializer
 
@@ -25,6 +26,7 @@ class UserRegistration(APIView):
         # Caps on accounts that exist, not on attempts, so failed or throttled requests can't use them up.
         # Both are 0 (off) by default. Bots that reach a cap also block real sign-ups until an admin
         # deletes them (Django admin), so hitting either one is logged as a warning.
+        refuse_if_storage_full('register')
         if settings.MAX_USERS and User.objects.count() >= settings.MAX_USERS:
             logger.warning('Registration refused: MAX_USERS=%s reached', settings.MAX_USERS)
             return Response({'detail': 'Registration is closed.'}, status=HTTP_403_FORBIDDEN)
