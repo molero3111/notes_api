@@ -216,6 +216,9 @@ CACHES = {
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             'PASSWORD': REDIS_PASSWORD,
+            # Fail fast: throttles fail open on cache errors, which only helps if a stuck Redis errors quickly
+            'SOCKET_CONNECT_TIMEOUT': 1,
+            'SOCKET_TIMEOUT': 1,
         }
     },
     'system': {

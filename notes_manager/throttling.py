@@ -1,10 +1,16 @@
+import hashlib
 import ipaddress
 import logging
 
 from django.conf import settings
+from django_redis.exceptions import ConnectionInterrupted
+from redis.exceptions import RedisError
 from rest_framework.throttling import SimpleRateThrottle
 
 logger = logging.getLogger(__name__)
+
+# What an unreachable or failing cache raises; anything else is a real bug and should surface
+CACHE_ERRORS = (ConnectionInterrupted, RedisError, OSError)
 
 
 class NotesRateThrottle(SimpleRateThrottle):
@@ -19,9 +25,11 @@ class NotesRateThrottle(SimpleRateThrottle):
     def allow_request(self, request, view):
         if not settings.THROTTLING_ENABLED:
             return True
+        # Build the key outside the try, so request parsing errors and bugs aren't mistaken for an outage
+        self.get_cache_key(request, view)
         try:
             return super().allow_request(request, view)
-        except Exception:
+        except CACHE_ERRORS:
             # The counters live in Redis; if it's unreachable, serve the request rather than fail all of them
             logger.warning('Throttle %s skipped: cache unavailable', self.scope, exc_info=True)
             return True
@@ -75,7 +83,9 @@ class LoginThrottle(NotesRateThrottle):
 
     def get_cache_key(self, request, view):
         username = request.data.get('username', '') if hasattr(request.data, 'get') else ''
-        return self.ident_cache_key(request, suffix=f'|{str(username).strip().lower()}')
+        # Hashed so a huge username can't write huge Redis keys and push other throttles out of the cache
+        digest = hashlib.sha256(str(username).strip().lower().encode()).hexdigest()[:32]
+        return self.ident_cache_key(request, suffix=f'|{digest}')
 
 
 class LoginIPThrottle(NotesRateThrottle):

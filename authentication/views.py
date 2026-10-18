@@ -29,14 +29,15 @@ class UserRegistration(APIView):
             logger.warning('Registration refused: MAX_USERS=%s reached', settings.MAX_USERS)
             return Response({'detail': 'Registration is closed.'}, status=HTTP_403_FORBIDDEN)
         if settings.REGISTRATIONS_PER_DAY:
+            cap = settings.REGISTRATIONS_PER_DAY
             now = timezone.now()
-            recent = User.objects.filter(date_joined__gte=now - timedelta(days=1)).order_by('date_joined')
-            if recent.count() >= settings.REGISTRATIONS_PER_DAY:
-                logger.warning('Registration refused: REGISTRATIONS_PER_DAY=%s reached',
-                               settings.REGISTRATIONS_PER_DAY)
-                # A slot frees up when the oldest sign-up in the window turns 24 hours old
-                oldest = recent.values_list('date_joined', flat=True).first()
-                retry_after = max(1, math.ceil((oldest + timedelta(days=1) - now).total_seconds()))
+            joined = list(User.objects.filter(date_joined__gte=now - timedelta(days=1))
+                          .order_by('date_joined').values_list('date_joined', flat=True))
+            if len(joined) >= cap:
+                logger.warning('Registration refused: REGISTRATIONS_PER_DAY=%s reached', cap)
+                # A slot frees once the window holds cap - 1 sign-ups, i.e. when this one turns 24 hours old
+                frees_at = joined[len(joined) - cap] + timedelta(days=1)
+                retry_after = max(1, math.ceil((frees_at - now).total_seconds()))
                 return Response({'detail': 'Too many new accounts today, please try again later.'},
                                 status=HTTP_429_TOO_MANY_REQUESTS, headers={'Retry-After': str(retry_after)})
 

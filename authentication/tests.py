@@ -6,7 +6,11 @@ from django.core.cache import cache
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
-from rest_framework.test import APITestCase
+from rest_framework.parsers import JSONParser
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory, APITestCase
+
+from notes_manager.throttling import LoginThrottle
 
 LOCMEM_CACHE = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 RATES = {'anon': '1000/min', 'user': '1000/min', 'login': '1000/min', 'login_ip': '1000/min',
@@ -83,6 +87,16 @@ class RegisterThrottleTests(ThrottleTestCase):
         self.assertEqual(self.register('u2', ip='2001:db8:1:ff::1').status_code, 429)
         self.assertEqual(self.register('u3', ip='2001:db8:2:1::1').status_code, 201)
 
+    @override_settings(REGISTRATIONS_PER_DAY=2)
+    def test_retry_after_uses_the_signup_that_frees_a_slot_when_over_the_cap(self):
+        # 3 sign-ups in the window with a cap of 2: a slot frees when the 2nd-oldest (10 h ago) ages out
+        now = timezone.now()
+        for name, hours_ago in (('a', 23), ('b', 10), ('c', 1)):
+            user = User.objects.create_user(username=name, password='x')
+            User.objects.filter(pk=user.pk).update(date_joined=now - timedelta(hours=hours_ago))
+        retry_after = int(self.register('d')['Retry-After'])
+        self.assertAlmostEqual(retry_after, 14 * 3600, delta=120)
+
     @override_settings(MAX_USERS=2)
     def test_registration_closes_at_max_users(self):
         User.objects.create_user(username='a', password='x')
@@ -120,6 +134,24 @@ class LoginThrottleTests(ThrottleTestCase):
         for _ in range(4):
             self.login()
         self.assertEqual(self.login(username='carol', password='carol-pass-123').status_code, 200)
+
+    def test_login_throttle_key_is_bounded_and_case_insensitive(self):
+        factory = APIRequestFactory()
+
+        def key_for(username):
+            request = Request(factory.post('/api/login/', {'username': username, 'password': 'x'}, format='json',
+                                           HTTP_CF_CONNECTING_IP='203.0.113.1'), parsers=[JSONParser()])
+            return LoginThrottle().get_cache_key(request, None)
+
+        self.assertLess(len(key_for('x' * 100000)), 200)
+        self.assertEqual(key_for('Alice'), key_for(' alice '))
+        self.assertNotEqual(key_for('alice'), key_for('bob'))
+
+    def test_malformed_login_body_is_a_400_not_a_cache_warning(self):
+        with self.assertNoLogs('notes_manager.throttling', level='WARNING'):
+            response = self.client.post('/api/login/', '{not json', content_type='application/json',
+                                        HTTP_CF_CONNECTING_IP='203.0.113.1')
+        self.assertEqual(response.status_code, 400)
 
     @override_settings(NOTES_THROTTLE_RATES=rates(login_ip='3/min'))
     def test_login_has_a_looser_per_ip_limit_across_usernames(self):
