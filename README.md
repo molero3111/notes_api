@@ -63,3 +63,35 @@ Merges (or pushes) to the `staging` branch trigger an automated deploy:
    - `SSH_PRIVATE_KEY` – paste the full private key (the matching public key must be in the VPS `~/.ssh/authorized_keys`)
 
 2. On the VPS, ensure the app lives at `~/notes_crud/backend` (clone the repo there if needed) and that Docker/Docker Compose are installed. The staging compose file uses the image from Docker Hub; no local build is required.
+
+## Homelab storage guard
+
+On the homelab, Postgres data lives on a fixed 300 MB volume (a loop-mounted ext4 image at `/srv/volumes/notes-api-db`). If that volume fills completely, Postgres stops and **can't restart** until space is freed. To keep the volume from filling, the api mounts it read-only and refuses writes once less than `DB_WRITE_GUARD_MIN_FREE_MB` (64) is free. Those settings go in the homelab `.env`:
+
+```
+DB_WRITE_GUARD_PATH=/var/lib/notes-db-volume
+DB_WRITE_GUARD_MIN_FREE_MB=64
+```
+
+**What happens when it trips:** note creates and updates, and sign-ups, return `507 Storage is full...`. Reading, deleting and login keep working. The api logs `Write refused (...): N MB free on the database volume`.
+
+**Recovery.** Postgres doesn't shrink its files when rows are deleted (it reuses the space internally), so deleting notes alone won't clear the guard. Run these from `/srv/apps/notes-api`:
+
+1. Find what filled it:
+   ```
+   docker compose -p notes-api exec db psql -U postgres -d notes_db -c \
+     "SELECT u.username, count(n.id) notes, pg_size_pretty(sum(pg_column_size(n.content))::bigint) content
+        FROM auth_user u JOIN notes_note n ON n.user_id = u.id GROUP BY u.username ORDER BY sum(pg_column_size(n.content)) DESC LIMIT 10;"
+   ```
+2. Delete the abusive accounts in Django admin (`/admin/` → Users); their notes are deleted with them.
+3. Reclaim the space. `VACUUM FULL` rewrites each table with only its live rows, so it needs free space about the size of the **remaining** data, not of the bloated table. Check the live size first:
+   ```
+   docker compose -p notes-api exec db psql -U postgres -d notes_db -c \
+     "SELECT pg_size_pretty(sum(pg_column_size(n.*))::bigint) live FROM notes_note n;"
+   docker compose -p notes-api exec db psql -U postgres -d notes_db -c \
+     "VACUUM FULL notes_note; VACUUM FULL notes_note_tags; VACUUM FULL notes_note_categories; VACUUM FULL authtoken_token; VACUUM FULL auth_user;"
+   ```
+   If the live data is close to the free space, grow the image instead (with the db stopped: `truncate -s +200M` on the image, then `losetup -c` and `resize2fs` on its loop device).
+4. Check `df -h /srv/volumes/notes-api-db`. Writes resume on their own once more than 64 MB is free.
+
+**If Postgres is already down from a full disk:** the image keeps 10% of its blocks reserved for root. `tune2fs -m 0 <loop device>` releases them so Postgres can start, then follow the steps above and restore the reserve with `tune2fs -m 10 <loop device>`.

@@ -97,7 +97,7 @@ class RegisterThrottleTests(ThrottleTestCase):
         retry_after = int(self.register('d')['Retry-After'])
         self.assertAlmostEqual(retry_after, 14 * 3600, delta=120)
 
-    @override_settings(DB_WRITE_GUARD_MAX_MB=1, DB_WRITE_GUARD_CACHE_SECONDS=0)
+    @override_settings(DB_WRITE_GUARD_PATH='/', DB_WRITE_GUARD_MIN_FREE_MB=1024 ** 3)
     def test_registration_is_refused_when_storage_is_full(self):
         response = self.register('u1')
         self.assertEqual(response.status_code, 507)

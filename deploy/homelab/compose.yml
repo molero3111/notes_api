@@ -36,6 +36,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    volumes:
+      # Read-only view of the db volume, so the storage guard can measure its free space
+      # (DB_WRITE_GUARD_PATH=/var/lib/notes-db-volume)
+      - postgres_data_capped:/var/lib/notes-db-volume:ro
     healthcheck:
       # Root of the DRF router, no auth needed. "localhost" must be in ALLOWED_HOSTS.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/', timeout=5)"]

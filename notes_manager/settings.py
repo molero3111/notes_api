@@ -178,12 +178,12 @@ REST_FRAMEWORK = {
     ],
 }
 
-# Refuse writes that grow the database (note create/grow, sign-up) once the whole Postgres cluster
-# (databases + WAL) reaches this size, so a capped data volume never fills up: Postgres can't restart
-# on a full disk. 0 disables. Postgres doesn't shrink files after deletes, so once this trips an admin
-# must reclaim space (VACUUM FULL, or grow the volume) or raise the limit.
-DB_WRITE_GUARD_MAX_MB = config('DB_WRITE_GUARD_MAX_MB', default=0, cast=int)
-DB_WRITE_GUARD_CACHE_SECONDS = config('DB_WRITE_GUARD_CACHE_SECONDS', default=30, cast=int)
+# Storage guard: Postgres can't restart once its data volume is full, so with DB_WRITE_GUARD_PATH set
+# (a read-only mount of that volume in the api container) note creates/updates and sign-ups get 507
+# while less than DB_WRITE_GUARD_MIN_FREE_MB is free. The margin must cover WAL growth up to
+# max_wal_size plus writes still allowed (deletes, logins). Empty path disables. Recovery: README.
+DB_WRITE_GUARD_PATH = config('DB_WRITE_GUARD_PATH', default='', cast=str)
+DB_WRITE_GUARD_MIN_FREE_MB = config('DB_WRITE_GUARD_MIN_FREE_MB', default=64, cast=int)
 
 # Rate limiting (DRF throttles, counted in the default Redis cache). Off by default; enable only where
 # CLIENT_IP_HEADER is a header the proxy chain always overwrites, otherwise every client shares the

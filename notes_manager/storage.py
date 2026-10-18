@@ -1,14 +1,11 @@
 import logging
-import time
+import os
 
 from django.conf import settings
-from django.db import DatabaseError, connection, transaction
 from rest_framework import status
 from rest_framework.exceptions import APIException
 
 logger = logging.getLogger(__name__)
-
-_cache = {'checked_at': None, 'bytes': 0}
 
 
 class StorageFull(APIException):
@@ -17,41 +14,29 @@ class StorageFull(APIException):
     default_code = 'storage_full'
 
 
-def database_bytes():
-    """On-disk size of every database in the cluster plus its WAL, which together fill the data volume."""
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT sum(pg_database_size(datname)) FROM pg_database')
-        total = int(cursor.fetchone()[0] or 0)
-        try:
-            # Savepoint, so a permission error here doesn't abort the request's transaction
-            with transaction.atomic():
-                cursor.execute('SELECT coalesce(sum(size), 0) FROM pg_ls_waldir()')
-                total += int(cursor.fetchone()[0])
-        except DatabaseError:
-            pass  # pg_ls_waldir needs superuser or pg_monitor; the database size alone still bounds most growth
-    return total
-
-
-def reset_cache():
-    _cache['checked_at'] = None
-
-
-def storage_full():
-    """True once the cluster reaches DB_WRITE_GUARD_MAX_MB (0 disables). Measured at most every
-    DB_WRITE_GUARD_CACHE_SECONDS per worker, since growth between checks is bounded by the throttles."""
-    limit_mb = settings.DB_WRITE_GUARD_MAX_MB
-    if not limit_mb:
-        return False
-    now = time.monotonic()
-    checked_at = _cache['checked_at']
-    if checked_at is None or now - checked_at >= settings.DB_WRITE_GUARD_CACHE_SECONDS:
-        _cache['bytes'] = database_bytes()
-        _cache['checked_at'] = now
-    return _cache['bytes'] >= limit_mb * 1024 * 1024
+def free_bytes(path):
+    """Space left for unprivileged writers on the filesystem holding path. Postgres runs as a normal user,
+    so the root-reserved blocks are excluded, just as they are for it."""
+    stats = os.statvfs(path)
+    return stats.f_bavail * stats.f_frsize
 
 
 def refuse_if_storage_full(action):
-    if storage_full():
-        logger.warning('Write refused (%s): database is %d MB, limit DB_WRITE_GUARD_MAX_MB=%d',
-                       action, _cache['bytes'] // (1024 * 1024), settings.DB_WRITE_GUARD_MAX_MB)
+    """Raise StorageFull when the Postgres data volume, mounted read-only at DB_WRITE_GUARD_PATH, has less
+    than DB_WRITE_GUARD_MIN_FREE_MB free. Measuring the filesystem itself counts everything that fills it:
+    data, WAL, temp and stats files. No-op when DB_WRITE_GUARD_PATH is empty."""
+    path = settings.DB_WRITE_GUARD_PATH
+    if not path:
+        return
+    try:
+        free = free_bytes(path)
+    except OSError:
+        # Fail closed: a missing mount must not silently switch the protection off
+        logger.error('Write refused (%s): cannot measure free space at DB_WRITE_GUARD_PATH=%s', action, path,
+                     exc_info=True)
+        raise StorageFull()
+    min_free = settings.DB_WRITE_GUARD_MIN_FREE_MB * 1024 * 1024
+    if free < min_free:
+        logger.warning('Write refused (%s): %d MB free on the database volume, minimum DB_WRITE_GUARD_MIN_FREE_MB=%d',
+                       action, free // (1024 * 1024), settings.DB_WRITE_GUARD_MIN_FREE_MB)
         raise StorageFull()

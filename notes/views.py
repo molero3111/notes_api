@@ -62,11 +62,9 @@ class NoteViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        # When storage is full, edits may shrink a note or change flags/tags, but not make its text longer
-        grows = any(len(serializer.validated_data.get(field, getattr(instance, field))) > len(getattr(instance, field))
-                    for field in ('title', 'content'))
-        if grows:
-            refuse_if_storage_full('note update')
+        # Postgres writes a new row version for every update, even same-length or flag-only ones,
+        # so when storage is full notes become read-only (deleting still works)
+        refuse_if_storage_full('note update')
         self.perform_update(serializer)
         return Response(serializer.data)
 

@@ -1,6 +1,5 @@
 from datetime import timedelta
 from io import StringIO
-from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.management import CommandError, call_command
@@ -164,36 +163,42 @@ class PurgeOldNotesTests(APITestCase):
         self.assertFalse(Note.objects.filter(pk=note.pk).exists())
 
 
-# Guard values: 1 MB is always exceeded by a PostGIS database, 1 TB never is
-ALWAYS_FULL = {'DB_WRITE_GUARD_MAX_MB': 1, 'DB_WRITE_GUARD_CACHE_SECONDS': 0}
-NEVER_FULL = {'DB_WRITE_GUARD_MAX_MB': 1024 * 1024, 'DB_WRITE_GUARD_CACHE_SECONDS': 0}
+# Guard values on "/": no filesystem has a petabyte free, and every one has a megabyte
+ALWAYS_FULL = {'DB_WRITE_GUARD_PATH': '/', 'DB_WRITE_GUARD_MIN_FREE_MB': 1024 ** 3}
+NEVER_FULL = {'DB_WRITE_GUARD_PATH': '/', 'DB_WRITE_GUARD_MIN_FREE_MB': 1}
 
 
 class StorageGuardTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='alice', password='pw-alice-123')
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {Token.objects.create(user=self.user).key}')
+        self.tag = Tag.objects.create(name='t')
         self.note = Note.objects.create(user=self.user, title='title', content='some content')
 
     def create_note(self):
         return self.client.post(NOTES_URL, {'title': 't', 'content': 'c', 'tags': [], 'categories': []},
                                 format='json')
 
-    def patch_note(self, **data):
-        return self.client.patch(f'{NOTES_URL}{self.note.id}/', data, format='json')
+    def note_url(self):
+        return f'{NOTES_URL}{self.note.id}/'
 
-    def test_database_size_is_measured(self):
-        from notes_manager.storage import database_bytes
-        self.assertGreater(database_bytes(), 1024 * 1024)
+    def full_put(self, **changes):
+        # The web app saves notes with a full PUT of every editable field
+        data = {'title': self.note.title, 'content': self.note.content, 'tags': [], 'categories': [], **changes}
+        return self.client.put(self.note_url(), data, format='json')
 
-    @override_settings(DB_WRITE_GUARD_MAX_MB=0)
+    def test_free_space_is_measured(self):
+        from notes_manager.storage import free_bytes
+        self.assertGreater(free_bytes('/'), 0)
+
+    @override_settings(DB_WRITE_GUARD_PATH='')
     def test_guard_is_off_by_default_setting(self):
         self.assertEqual(self.create_note().status_code, 201)
 
     @override_settings(**NEVER_FULL)
-    def test_writes_are_allowed_below_the_limit(self):
+    def test_writes_are_allowed_while_there_is_room(self):
         self.assertEqual(self.create_note().status_code, 201)
-        self.assertEqual(self.patch_note(content='much longer content than before').status_code, 200)
+        self.assertEqual(self.full_put(content='much longer content than before').status_code, 200)
 
     @override_settings(**ALWAYS_FULL)
     def test_creating_notes_is_refused_when_full(self):
@@ -203,25 +208,24 @@ class StorageGuardTests(APITestCase):
         self.assertEqual(Note.objects.count(), 1)
 
     @override_settings(**ALWAYS_FULL)
-    def test_growing_a_note_is_refused_when_full(self):
+    def test_every_kind_of_note_update_is_refused_when_full(self):
+        # Postgres writes a new row version for any update, so same-length or flag-only edits grow the table too
         with self.assertLogs('notes_manager.storage', level='WARNING'):
-            self.assertEqual(self.patch_note(content='some content, now longer').status_code, 507)
-            self.assertEqual(self.patch_note(title='a longer title').status_code, 507)
+            self.assertEqual(self.full_put().status_code, 507)
+            self.assertEqual(self.full_put(content='same length!').status_code, 507)
+            self.assertEqual(self.full_put(tags=[self.tag.pk]).status_code, 507)
+            self.assertEqual(self.client.patch(self.note_url(), {'archived': True}, format='json').status_code, 507)
         self.note.refresh_from_db()
-        self.assertEqual(self.note.content, 'some content')
+        self.assertEqual((self.note.content, self.note.archived, self.note.tags.count()), ('some content', False, 0))
 
     @override_settings(**ALWAYS_FULL)
-    def test_shrinking_archiving_reading_and_deleting_still_work_when_full(self):
-        self.assertEqual(self.patch_note(content='short').status_code, 200)
-        self.assertEqual(self.patch_note(archived=True).status_code, 200)
+    def test_reading_and_deleting_still_work_when_full(self):
         self.assertEqual(self.client.get(NOTES_URL).status_code, 200)
-        self.assertEqual(self.client.delete(f'{NOTES_URL}{self.note.id}/').status_code, 204)
+        self.assertEqual(self.client.get(self.note_url()).status_code, 200)
+        self.assertEqual(self.client.delete(self.note_url()).status_code, 204)
 
-    @override_settings(DB_WRITE_GUARD_MAX_MB=1, DB_WRITE_GUARD_CACHE_SECONDS=60)
-    def test_size_is_cached_between_checks(self):
-        from notes_manager import storage
-        storage.reset_cache()
-        with mock.patch('notes_manager.storage.database_bytes', return_value=10) as measure:
-            self.assertEqual(self.create_note().status_code, 201)
-            self.assertEqual(self.create_note().status_code, 201)
-        self.assertEqual(measure.call_count, 1)
+    @override_settings(DB_WRITE_GUARD_PATH='/no/such/mount', DB_WRITE_GUARD_MIN_FREE_MB=1)
+    def test_unreadable_guard_path_fails_closed(self):
+        # A missing volume mount must not silently disable the protection
+        with self.assertLogs('notes_manager.storage', level='ERROR'):
+            self.assertEqual(self.create_note().status_code, 507)
