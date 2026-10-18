@@ -179,7 +179,7 @@ REST_FRAMEWORK = {
 }
 
 # Storage guard: Postgres can't restart once its data volume is full, so with DB_WRITE_GUARD_PATH set
-# (a read-only mount of that volume in the api container) note creates/updates and sign-ups get 507
+# (a read-only mount of a directory on that filesystem in the api container) note creates/updates and sign-ups get 507
 # while less than DB_WRITE_GUARD_MIN_FREE_MB is free. The margin must cover WAL growth up to
 # max_wal_size plus writes still allowed (deletes, logins). Empty path disables. Recovery: README.
 DB_WRITE_GUARD_PATH = config('DB_WRITE_GUARD_PATH', default='', cast=str)

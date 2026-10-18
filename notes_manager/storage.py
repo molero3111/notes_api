@@ -22,16 +22,19 @@ def free_bytes(path):
 
 
 def refuse_if_storage_full(action):
-    """Raise StorageFull when the Postgres data volume, mounted read-only at DB_WRITE_GUARD_PATH, has less
-    than DB_WRITE_GUARD_MIN_FREE_MB free. Measuring the filesystem itself counts everything that fills it:
-    data, WAL, temp and stats files. No-op when DB_WRITE_GUARD_PATH is empty."""
+    """Raise StorageFull when the Postgres data filesystem has less than DB_WRITE_GUARD_MIN_FREE_MB free.
+    DB_WRITE_GUARD_PATH is a read-only mount of an empty directory on that filesystem. Measuring the
+    filesystem itself counts everything that fills it: data, WAL, temp and stats files. No-op when unset."""
     path = settings.DB_WRITE_GUARD_PATH
     if not path:
         return
     try:
+        # Fail closed: a missing mount, or an ordinary directory that would measure the container's own
+        # disk, must not silently switch the protection off
+        if not os.path.ismount(path):
+            raise OSError(f'{path} is not a mount point')
         free = free_bytes(path)
     except OSError:
-        # Fail closed: a missing mount must not silently switch the protection off
         logger.error('Write refused (%s): cannot measure free space at DB_WRITE_GUARD_PATH=%s', action, path,
                      exc_info=True)
         raise StorageFull()

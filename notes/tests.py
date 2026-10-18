@@ -1,5 +1,6 @@
 from datetime import timedelta
 from io import StringIO
+import tempfile
 
 from django.contrib.auth.models import User
 from django.core.management import CommandError, call_command
@@ -223,6 +224,13 @@ class StorageGuardTests(APITestCase):
         self.assertEqual(self.client.get(NOTES_URL).status_code, 200)
         self.assertEqual(self.client.get(self.note_url()).status_code, 200)
         self.assertEqual(self.client.delete(self.note_url()).status_code, 204)
+
+    def test_guard_path_that_is_not_a_mount_fails_closed(self):
+        # An existing ordinary directory would measure the container's own disk, not the db volume
+        with tempfile.TemporaryDirectory() as plain_dir, \
+                override_settings(DB_WRITE_GUARD_PATH=plain_dir, DB_WRITE_GUARD_MIN_FREE_MB=1), \
+                self.assertLogs('notes_manager.storage', level='ERROR'):
+            self.assertEqual(self.create_note().status_code, 507)
 
     @override_settings(DB_WRITE_GUARD_PATH='/no/such/mount', DB_WRITE_GUARD_MIN_FREE_MB=1)
     def test_unreadable_guard_path_fails_closed(self):

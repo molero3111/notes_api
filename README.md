@@ -66,7 +66,7 @@ Merges (or pushes) to the `staging` branch trigger an automated deploy:
 
 ## Homelab storage guard
 
-On the homelab, Postgres data lives on a fixed 300 MB volume (a loop-mounted ext4 image at `/srv/volumes/notes-api-db`). If that volume fills completely, Postgres stops and **can't restart** until space is freed. To keep the volume from filling, the api mounts it read-only and refuses writes once less than `DB_WRITE_GUARD_MIN_FREE_MB` (64) is free. Those settings go in the homelab `.env`:
+On the homelab, Postgres data lives on a fixed 300 MB volume: a loop-mounted ext4 image at `/srv/volumes/notes-api-db.img`, mounted at `/srv/volumes/notes-api-db`, with the db data in `data/`. If that volume fills completely, Postgres stops and **can't restart** until space is freed. To keep the volume from filling, the api mounts the empty `guard/` directory from the same filesystem read-only and refuses writes once less than `DB_WRITE_GUARD_MIN_FREE_MB` (64) is free. The guard refuses writes if its path isn't a mount point. Those settings go in the homelab `.env`:
 
 ```
 DB_WRITE_GUARD_PATH=/var/lib/notes-db-volume
@@ -75,7 +75,7 @@ DB_WRITE_GUARD_MIN_FREE_MB=64
 
 **What happens when it trips:** note creates and updates, and sign-ups, return `507 Storage is full...`. Reading, deleting and login keep working. The api logs `Write refused (...): N MB free on the database volume`.
 
-**Recovery.** Postgres doesn't shrink its files when rows are deleted (it reuses the space internally), so deleting notes alone won't clear the guard. Run these from `/srv/apps/notes-api`:
+**Recovery.** Postgres doesn't shrink its files when rows are deleted (it reuses the space internally), so deleting notes alone won't clear the guard. **Don't deploy while the guard is tripped:** the api runs `migrate` and `loaddata` on every start, which write to the db unguarded. Run these from `/srv/apps/notes-api`:
 
 1. Find what filled it:
    ```
@@ -84,14 +84,18 @@ DB_WRITE_GUARD_MIN_FREE_MB=64
         FROM auth_user u JOIN notes_note n ON n.user_id = u.id GROUP BY u.username ORDER BY sum(pg_column_size(n.content)) DESC LIMIT 10;"
    ```
 2. Delete the abusive accounts in Django admin (`/admin/` → Users); their notes are deleted with them.
-3. Reclaim the space. `VACUUM FULL` rewrites each table with only its live rows, so it needs free space about the size of the **remaining** data, not of the bloated table. Check the live size first:
+3. Reclaim the space. `VACUUM FULL` rewrites a table with only its live rows and rebuilds its indexes, writing about as much WAL as it copies. So it needs free space of roughly **1.5 × (live rows + indexes)** of that table, not of the bloated table. Check the biggest one first:
    ```
    docker compose -p notes-api exec db psql -U postgres -d notes_db -c \
-     "SELECT pg_size_pretty(sum(pg_column_size(n.*))::bigint) live FROM notes_note n;"
-   docker compose -p notes-api exec db psql -U postgres -d notes_db -c \
-     "VACUUM FULL notes_note; VACUUM FULL notes_note_tags; VACUUM FULL notes_note_categories; VACUUM FULL authtoken_token; VACUUM FULL auth_user;"
+     "SELECT pg_size_pretty(sum(pg_column_size(n.*))::bigint) live_rows, pg_size_pretty(pg_indexes_size('notes_note')) indexes FROM notes_note n;"
    ```
-   If the live data is close to the free space, grow the image instead (with the db stopped: `truncate -s +200M` on the image, then `losetup -c` and `resize2fs` on its loop device).
+   If that fits in the free space, vacuum one table per command, largest first (`VACUUM` can't run inside a multi-statement `-c`):
+   ```
+   for t in notes_note notes_note_tags notes_note_categories authtoken_token auth_user; do
+     docker compose -p notes-api exec db psql -U postgres -d notes_db -c "VACUUM FULL $t;"
+   done
+   ```
+   If it doesn't fit, grow the image first. Stop the stack, then run `truncate -s +200M /srv/volumes/notes-api-db.img`, find its loop device with `losetup -j /srv/volumes/notes-api-db.img`, and run `losetup -c <loop device>` and `resize2fs <loop device>`.
 4. Check `df -h /srv/volumes/notes-api-db`. Writes resume on their own once more than 64 MB is free.
 
-**If Postgres is already down from a full disk:** the image keeps 10% of its blocks reserved for root. `tune2fs -m 0 <loop device>` releases them so Postgres can start, then follow the steps above and restore the reserve with `tune2fs -m 10 <loop device>`.
+**If Postgres is already down from a full disk:** the image keeps 10% of its blocks reserved for root. `tune2fs -m 0 <loop device>` (from `losetup -j` above) releases them so Postgres can start, then follow the steps above and restore the reserve with `tune2fs -m 10 <loop device>`.
