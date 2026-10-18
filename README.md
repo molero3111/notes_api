@@ -71,7 +71,12 @@ On the homelab, Postgres data lives on a fixed 300 MB volume: a loop-mounted ext
 ```
 DB_WRITE_GUARD_PATH=/var/lib/notes-db-volume
 DB_WRITE_GUARD_MIN_FREE_MB=64
+DB_WRITE_GUARD_MAX_TOTAL_MB=1024
 ```
+
+`DB_WRITE_GUARD_MAX_TOTAL_MB` refuses writes if the measured filesystem is bigger than the image could be, which catches `guard/` accidentally pointing at the root disk. Raise it if you grow the image past 1 GB.
+
+**One-time setup**, with the image mounted (`findmnt /srv/volumes/notes-api-db` must show the loop device): `mkdir /srv/volumes/notes-api-db/guard`. Creating it while the image isn't mounted would put it on the root disk, which the size check above would then refuse.
 
 **What happens when it trips:** note creates and updates, and sign-ups, return `507 Storage is full...`. Reading, deleting and login keep working. The api logs `Write refused (...): N MB free on the database volume`.
 

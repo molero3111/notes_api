@@ -184,6 +184,9 @@ REST_FRAMEWORK = {
 # max_wal_size plus writes still allowed (deletes, logins). Empty path disables. Recovery: README.
 DB_WRITE_GUARD_PATH = config('DB_WRITE_GUARD_PATH', default='', cast=str)
 DB_WRITE_GUARD_MIN_FREE_MB = config('DB_WRITE_GUARD_MIN_FREE_MB', default=64, cast=int)
+# Fail closed if the guard path's filesystem is bigger than this (0 skips the check): a sign it's
+# measuring the wrong disk
+DB_WRITE_GUARD_MAX_TOTAL_MB = config('DB_WRITE_GUARD_MAX_TOTAL_MB', default=0, cast=int)
 
 # Rate limiting (DRF throttles, counted in the default Redis cache). Off by default; enable only where
 # CLIENT_IP_HEADER is a header the proxy chain always overwrites, otherwise every client shares the

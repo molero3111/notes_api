@@ -232,6 +232,12 @@ class StorageGuardTests(APITestCase):
                 self.assertLogs('notes_manager.storage', level='ERROR'):
             self.assertEqual(self.create_note().status_code, 507)
 
+    @override_settings(DB_WRITE_GUARD_PATH='/', DB_WRITE_GUARD_MIN_FREE_MB=1, DB_WRITE_GUARD_MAX_TOTAL_MB=1)
+    def test_filesystem_larger_than_the_volume_fails_closed(self):
+        # A bind of a root-disk directory passes ismount; its size gives it away
+        with self.assertLogs('notes_manager.storage', level='ERROR'):
+            self.assertEqual(self.create_note().status_code, 507)
+
     @override_settings(DB_WRITE_GUARD_PATH='/no/such/mount', DB_WRITE_GUARD_MIN_FREE_MB=1)
     def test_unreadable_guard_path_fails_closed(self):
         # A missing volume mount must not silently disable the protection

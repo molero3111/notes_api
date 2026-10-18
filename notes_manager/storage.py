@@ -33,6 +33,13 @@ def refuse_if_storage_full(action):
         # disk, must not silently switch the protection off
         if not os.path.ismount(path):
             raise OSError(f'{path} is not a mount point')
+        # Any bind mount passes ismount, so also reject a filesystem bigger than the db volume can be,
+        # which is what a bind of a root-disk directory would measure
+        max_total_mb = settings.DB_WRITE_GUARD_MAX_TOTAL_MB
+        stats = os.statvfs(path)
+        if max_total_mb and stats.f_blocks * stats.f_frsize > max_total_mb * 1024 * 1024:
+            raise OSError(f'{path} is on a {stats.f_blocks * stats.f_frsize // (1024 * 1024)} MB filesystem, '
+                          f'over DB_WRITE_GUARD_MAX_TOTAL_MB={max_total_mb}')
         free = free_bytes(path)
     except OSError:
         logger.error('Write refused (%s): cannot measure free space at DB_WRITE_GUARD_PATH=%s', action, path,
