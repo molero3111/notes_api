@@ -172,7 +172,26 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'notes_manager.throttling.AnonThrottle',
+        'notes_manager.throttling.UserThrottle',
+    ],
 }
+
+# Rate limiting (DRF throttles, counted in the default Redis cache). Off by default; enable only where
+# CLIENT_IP_HEADER is a header the proxy chain always overwrites, otherwise every client shares the
+# proxy's IP or can pick its own.
+THROTTLING_ENABLED = config('THROTTLING_ENABLED', default=False, cast=bool)
+CLIENT_IP_HEADER = config('CLIENT_IP_HEADER', default='', cast=str)
+NOTES_THROTTLE_RATES = {
+    'anon': config('THROTTLE_RATE_ANON', default='60/min', cast=str),
+    'user': config('THROTTLE_RATE_USER', default='300/min', cast=str),
+    'login': config('THROTTLE_RATE_LOGIN', default='10/min', cast=str),
+    'register': config('THROTTLE_RATE_REGISTER', default='5/hour', cast=str),
+}
+# Sign-up caps on accounts actually created; 0 disables each
+REGISTRATIONS_PER_DAY = config('REGISTRATIONS_PER_DAY', default=0, cast=int)
+MAX_USERS = config('MAX_USERS', default=0, cast=int)
 
 # Abuse limits for notes
 NOTE_MAX_CONTENT_LENGTH = config('NOTE_MAX_CONTENT_LENGTH', default=10000, cast=int)
